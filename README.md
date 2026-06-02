@@ -59,8 +59,10 @@ npm run install:all   # installs the frontend
 npm run dev           # start the app (http://localhost:5173)
 ```
 
-On first use of a feature the app lazily downloads OpenCV.js (~8 MB) from a CDN, so the
-first watermark/background run needs a network connection; everything else is local.
+OpenCV.js (~10 MB) is **self-hosted** in `frontend/static/opencv.js` and lazily loaded
+from the same origin on first use — no third-party CDN, version-pinned with the app, and
+fully offline-capable. The first run does a one-time WASM compile (a brief pause shown
+with a spinner); everything after is instant.
 
 ### Build
 

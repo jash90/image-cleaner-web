@@ -5,12 +5,18 @@
 // feature-detect the function it needs and fall back to a pure-JS path, because
 // the default OpenCV.js builds frequently omit `cv.inpaint`.
 
+import { base } from '$app/paths';
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Cv = any;
 
-// Official emscripten build — exposes a global `cv` and the documented
-// `onRuntimeInitialized` lifecycle. ~8MB, loaded once on first use.
-const OPENCV_URL = 'https://docs.opencv.org/4.10.0/opencv.js';
+// Self-hosted official OpenCV.js 4.10.0 (emscripten build) shipped from
+// frontend/static/. Loading it same-origin — rather than from a CDN — pins the
+// exact bytes alongside the app (no SRI / supply-chain risk), keeps the tool
+// fully offline-capable, and avoids leaking the user's IP to a third party,
+// which matters for an app whose whole promise is "nothing leaves your device".
+// To upgrade: replace frontend/static/opencv.js and bump this version note.
+const OPENCV_URL = `${base}/opencv.js`;
 const SCRIPT_ID = 'opencv-js';
 const READY_TIMEOUT_MS = 60_000;
 
