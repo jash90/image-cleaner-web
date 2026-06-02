@@ -4,11 +4,14 @@ import type {
   ProcessResult,
   BatchFile,
   BatchProgress,
+  ProcessMode,
+  BackgroundOptions,
 } from '$lib/types/watermark';
 
 // App state using Svelte 5 runes
 class AppState {
   stage = $state<AppStage>('upload');
+  mode = $state<ProcessMode>('watermark');
   currentFile = $state<File | null>(null);
   imagePreviewUrl = $state<string | null>(null);
   region = $state<WatermarkRegion | null>(null);
@@ -16,6 +19,13 @@ class AppState {
   isProcessing = $state(false);
   error = $state<string | null>(null);
   result = $state<ProcessResult | null>(null);
+
+  // Background-removal options
+  bgOptions = $state<BackgroundOptions>({
+    method: 'grabcut',
+    tolerance: 32,
+    feather: 1,
+  });
 
   // Batch mode
   batchFiles = $state<BatchFile[]>([]);
@@ -26,16 +36,22 @@ class AppState {
   maxParallelJobs = $state(2);
   activeJobs = $state(0);
 
-  // API connection status
-  apiConnected = $state<boolean | null>(null);
-
   // Derived states
+
+  // A region is required for: watermark removal, and background GrabCut.
+  // It is optional for colour-key background removal (sampled from the edges).
+  private regionRequired = $derived(
+    this.mode === 'watermark' || this.bgOptions.method === 'grabcut'
+  );
+
+  private hasValidRegion = $derived(
+    this.region !== null && this.region.width >= 5 && this.region.height >= 5
+  );
+
   canProcess = $derived(
     this.currentFile !== null &&
-      this.region !== null &&
-      this.region.width >= 5 &&
-      this.region.height >= 5 &&
-      !this.isProcessing
+      !this.isProcessing &&
+      (!this.regionRequired || this.hasValidRegion)
   );
 
   isBatchMode = $derived(this.batchFiles.length > 1);
@@ -55,12 +71,28 @@ class AppState {
   );
 
   // Actions
+  setMode(mode: ProcessMode) {
+    this.mode = mode;
+  }
+
+  setBgMethod(method: BackgroundOptions['method']) {
+    this.bgOptions = { ...this.bgOptions, method };
+  }
+
+  setBgTolerance(tolerance: number) {
+    this.bgOptions = { ...this.bgOptions, tolerance };
+  }
+
+  setBgFeather(feather: number) {
+    this.bgOptions = { ...this.bgOptions, feather };
+  }
+
   setFile(file: File) {
     this.currentFile = file;
     this.imagePreviewUrl = URL.createObjectURL(file);
     this.region = null;
     this.error = null;
-    this.result = null;
+    this.clearResult();
     this.stage = 'select';
   }
 
@@ -107,9 +139,17 @@ class AppState {
   }
 
   setResult(result: ProcessResult) {
+    this.clearResult();
     this.result = result;
     this.isProcessing = false;
     this.stage = 'preview';
+  }
+
+  private clearResult() {
+    if (this.result?.blobUrl) {
+      URL.revokeObjectURL(this.result.blobUrl);
+    }
+    this.result = null;
   }
 
   updateBatchFile(id: string, update: Partial<BatchFile>) {
@@ -133,10 +173,6 @@ class AppState {
     this.stage = 'batch-results';
   }
 
-  setApiConnected(connected: boolean) {
-    this.apiConnected = connected;
-  }
-
   setParallelProcessing(value: boolean) {
     this.parallelProcessing = value;
   }
@@ -153,13 +189,17 @@ class AppState {
     if (this.imagePreviewUrl) {
       URL.revokeObjectURL(this.imagePreviewUrl);
     }
+    // Revoke any batch result URLs too
+    for (const f of this.batchFiles) {
+      if (f.result?.blobUrl) URL.revokeObjectURL(f.result.blobUrl);
+    }
+    this.clearResult();
     this.stage = 'upload';
     this.currentFile = null;
     this.imagePreviewUrl = null;
     this.region = null;
     this.isProcessing = false;
     this.error = null;
-    this.result = null;
     this.batchFiles = [];
     this.batchProgress = null;
   }
@@ -172,7 +212,7 @@ class AppState {
         break;
       case 'preview':
         this.stage = 'select';
-        this.result = null;
+        this.clearResult();
         break;
       case 'batch-results':
         this.reset();

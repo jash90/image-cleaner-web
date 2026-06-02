@@ -5,15 +5,38 @@ export interface WatermarkRegion {
   height: number;
 }
 
+export type ProcessMode = 'watermark' | 'background';
+
+export type BackgroundMethod = 'grabcut' | 'colorkey';
+
+export interface BackgroundOptions {
+  /** grabcut = segment the subject inside the selected box; colorkey = remove a sampled flat colour */
+  method: BackgroundMethod;
+  /** colorkey: max colour distance (0-255) still treated as background */
+  tolerance: number;
+  /** edge feather radius in pixels (both methods) */
+  feather: number;
+}
+
 export interface RemovalOptions {
+  /** watermark mode: save as PNG instead of JPEG */
   lossless: boolean;
 }
 
 export interface ProcessResult {
   id: string;
   originalFilename: string;
-  processedUrl: string;
-  previewUrl: string;
+  /** object URL of the processed image blob (for preview + download) */
+  blobUrl: string;
+  /** the processed image itself */
+  blob: Blob;
+  /** suggested download filename */
+  downloadName: string;
+  /** true when the output contains transparency (background removal) */
+  hasAlpha: boolean;
+  /** output dimensions */
+  width: number;
+  height: number;
   originalSize: number;
   processedSize: number;
   processingTimeMs: number;
@@ -49,10 +72,3 @@ export type AppStage =
   | 'batch-select'
   | 'batch-processing'
   | 'batch-results';
-
-export interface ApiError {
-  statusCode: number;
-  message: string;
-  timestamp: string;
-  path: string;
-}

@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { api } from '$lib/api/client';
   import type { ProcessResult } from '$lib/types/watermark';
 
   interface Props {
@@ -107,8 +106,8 @@
     return `${sign}${change.toFixed(1)}%`;
   }
 
-  const processedPreviewUrl = $derived(api.getPreviewUrl(result.previewUrl));
-  const downloadUrl = $derived(api.getDownloadUrl(result.processedUrl));
+  const processedPreviewUrl = $derived(result.blobUrl);
+  const downloadUrl = $derived(result.blobUrl);
   const sizeChange = $derived(calculateChange(result.originalSize, result.processedSize));
   const isSmaller = $derived(result.processedSize < result.originalSize);
 </script>
@@ -187,7 +186,7 @@
         style="transform: scale({zoomLevel}) translate({panPosition.x / zoomLevel}px, {panPosition.y / zoomLevel}px);"
       >
         <img src={originalUrl} alt="Original" class="original-image" />
-        <div class="processed-overlay" style="clip-path: inset(0 0 0 {sliderPosition}%);">
+        <div class="processed-overlay" class:checker={result.hasAlpha} style="clip-path: inset(0 0 0 {sliderPosition}%);">
           <img src={processedPreviewUrl} alt="Processed" />
         </div>
       </div>
@@ -230,6 +229,7 @@
         <div class="side-label">After</div>
         <div
           class="side-image-wrapper"
+          class:checker={result.hasAlpha}
           style="transform: scale({zoomLevel}) translate({panPosition.x / zoomLevel}px, {panPosition.y / zoomLevel}px);"
         >
           <img src={processedPreviewUrl} alt="Processed" />
@@ -250,6 +250,7 @@
     >
       <div
         class="overlay-image-wrapper"
+        class:checker={result.hasAlpha}
         style="transform: scale({zoomLevel}) translate({panPosition.x / zoomLevel}px, {panPosition.y / zoomLevel}px);"
       >
         <img src={originalUrl} alt="Original" class="overlay-base" />
@@ -291,7 +292,7 @@
   </div>
 
   <div class="actions">
-    <a href={downloadUrl} download={result.originalFilename.replace(/\.[^.]+$/, '_processed.png')} class="btn btn-primary">
+    <a href={downloadUrl} download={result.downloadName} class="btn btn-primary">
       Download Processed Image
     </a>
   </div>
@@ -430,6 +431,18 @@
     left: 0;
     width: 100%;
     height: 100%;
+  }
+
+  /* Checkerboard backdrop to reveal transparency (background removal). */
+  .checker {
+    background-color: #ffffff;
+    background-image:
+      linear-gradient(45deg, #c8c8c8 25%, transparent 25%),
+      linear-gradient(-45deg, #c8c8c8 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #c8c8c8 75%),
+      linear-gradient(-45deg, transparent 75%, #c8c8c8 75%);
+    background-size: 20px 20px;
+    background-position: 0 0, 0 10px, 10px -10px, -10px 0;
   }
 
   .slider-handle {

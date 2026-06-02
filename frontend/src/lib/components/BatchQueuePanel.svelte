@@ -1,6 +1,5 @@
 <script lang="ts">
   import { appState } from '$lib/stores/app.svelte';
-  import { api } from '$lib/api/client';
 
   const statusIcons: Record<string, string> = {
     pending: '⏳',
@@ -32,8 +31,8 @@
         <span class="filename">{file.filename}</span>
         {#if file.status === 'completed' && file.result}
           <a
-            href={api.getDownloadUrl(file.result.processedUrl)}
-            download={file.filename.replace(/\.[^.]+$/, '_processed.png')}
+            href={file.result.blobUrl}
+            download={file.result.downloadName}
             class="download-link"
           >
             Download

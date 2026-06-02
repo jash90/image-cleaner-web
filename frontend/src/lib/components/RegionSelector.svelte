@@ -8,9 +8,17 @@
     imageHeight: number;
     onRegionChange: (region: WatermarkRegion) => void;
     initialRegion?: WatermarkRegion | null;
+    instruction?: string;
   }
 
-  let { imageUrl, imageWidth, imageHeight, onRegionChange, initialRegion = null }: Props = $props();
+  let {
+    imageUrl,
+    imageWidth,
+    imageHeight,
+    onRegionChange,
+    initialRegion = null,
+    instruction = 'Click and drag to select a region',
+  }: Props = $props();
 
   let container: HTMLDivElement;
   let imageWrapper: HTMLDivElement;
@@ -186,7 +194,7 @@
     ontouchmove={handleTouchMove}
     ontouchend={handleTouchEnd}
     role="application"
-    aria-label="Draw a rectangle over the watermark to remove"
+    aria-label={instruction}
   >
     <img src={imageUrl} alt="Select watermark region" draggable="false" />
 
@@ -292,7 +300,7 @@
       </div>
     {:else}
       <p class="instructions">
-        Click and drag to select the watermark region
+        {instruction}
       </p>
     {/if}
   </div>

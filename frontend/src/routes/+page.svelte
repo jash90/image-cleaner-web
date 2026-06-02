@@ -1,10 +1,11 @@
 <script lang="ts">
   import { appState } from '$lib/stores/app.svelte';
-  import { api } from '$lib/api/client';
+  import { processImage } from '$lib/processing/processor';
   import ImageDropZone from '$lib/components/ImageDropZone.svelte';
   import RegionSelector from '$lib/components/RegionSelector.svelte';
   import PreviewPanel from '$lib/components/PreviewPanel.svelte';
   import OptionsPanel from '$lib/components/OptionsPanel.svelte';
+  import ModeToggle from '$lib/components/ModeToggle.svelte';
   import BatchQueuePanel from '$lib/components/BatchQueuePanel.svelte';
   import ErrorMessage from '$lib/components/ErrorMessage.svelte';
   import Spinner from '$lib/components/Spinner.svelte';
@@ -25,29 +26,54 @@
     }
   });
 
+  const params = () => ({
+    lossless: appState.lossless,
+    bgOptions: appState.bgOptions,
+  });
+
+  // Mode-aware instruction for the region selector.
+  const selectorInstruction = $derived(
+    appState.mode === 'watermark'
+      ? 'Click and drag a box over the watermark to erase it'
+      : appState.bgOptions.method === 'grabcut'
+        ? 'Click and drag a box around the subject you want to keep'
+        : 'Colour-key removes the edge background automatically — no box needed'
+  );
+
+  const regionOptional = $derived(
+    appState.mode === 'background' && appState.bgOptions.method === 'colorkey'
+  );
+
+  const actionLabel = $derived(
+    appState.mode === 'watermark' ? 'Remove Watermark' : 'Remove Background'
+  );
+
   function handleRegionChange(region: WatermarkRegion) {
     appState.setRegion(region);
   }
 
   async function handleProcess() {
-    if (!appState.currentFile || !appState.region) return;
+    if (!appState.currentFile) return;
 
     appState.setProcessing(true);
+    appState.stage = 'processing';
 
     try {
-      const result = await api.removeWatermark(
+      const result = await processImage(
         appState.currentFile,
+        appState.mode,
         appState.region,
-        appState.lossless
+        params()
       );
       appState.setResult(result);
     } catch (error) {
       appState.setError(error instanceof Error ? error.message : 'Processing failed');
+      appState.stage = 'select';
     }
   }
 
   async function handleBatchProcess() {
-    if (!appState.region || appState.batchFiles.length === 0) return;
+    if (appState.batchFiles.length === 0) return;
 
     if (appState.parallelProcessing) {
       await handleBatchProcessParallel();
@@ -57,8 +83,6 @@
   }
 
   async function handleBatchProcessSequential() {
-    if (!appState.region) return;
-
     appState.startBatchProcessing();
 
     for (let i = 0; i < appState.batchFiles.length; i++) {
@@ -73,10 +97,11 @@
       appState.updateBatchFile(batchFile.id, { status: 'processing' });
 
       try {
-        const result = await api.removeWatermark(
+        const result = await processImage(
           batchFile.file,
+          appState.mode,
           appState.region,
-          appState.lossless
+          params()
         );
         appState.updateBatchFile(batchFile.id, { status: 'completed', result });
       } catch (error) {
@@ -91,23 +116,22 @@
   }
 
   async function handleBatchProcessParallel() {
-    if (!appState.region) return;
-
     appState.startBatchProcessing();
 
     const pendingFiles = [...appState.batchFiles];
     const maxJobs = appState.maxParallelJobs;
     let completedCount = 0;
 
-    const processFile = async (batchFile: typeof pendingFiles[0]) => {
+    const processFile = async (batchFile: (typeof pendingFiles)[0]) => {
       appState.updateBatchFile(batchFile.id, { status: 'processing' });
       appState.setActiveJobs(appState.activeJobs + 1);
 
       try {
-        const result = await api.removeWatermark(
+        const result = await processImage(
           batchFile.file,
-          appState.region!,
-          appState.lossless
+          appState.mode,
+          appState.region,
+          params()
         );
         appState.updateBatchFile(batchFile.id, { status: 'completed', result });
       } catch (error) {
@@ -126,7 +150,6 @@
       }
     };
 
-    // Process in parallel chunks
     for (let i = 0; i < pendingFiles.length; i += maxJobs) {
       const chunk = pendingFiles.slice(i, i + maxJobs);
       appState.setBatchProgress({
@@ -157,10 +180,12 @@
 
   {#if appState.stage === 'upload'}
     <div class="upload-section">
-      <h2>Remove Watermarks with AI</h2>
+      <h2>Remove watermarks &amp; backgrounds — without AI</h2>
       <p class="subtitle">
-        Upload an image and select the watermark region to remove it using Google Gemini AI
+        Everything runs locally in your browser using classical computer vision. No upload, no
+        account, no API key.
       </p>
+      <ModeToggle />
       <ImageDropZone />
     </div>
 
@@ -173,9 +198,11 @@
           </svg>
           Back
         </button>
-        <h2>Select Watermark Region</h2>
+        <h2>{appState.mode === 'watermark' ? 'Select Watermark Region' : 'Select Subject / Background'}</h2>
         <div class="spacer"></div>
       </div>
+
+      <ModeToggle />
 
       {#if appState.imagePreviewUrl && imageWidth > 0}
         <div class="selector-wrapper">
@@ -185,6 +212,7 @@
             {imageHeight}
             onRegionChange={handleRegionChange}
             initialRegion={appState.region}
+            instruction={selectorInstruction}
           />
         </div>
       {/if}
@@ -197,6 +225,8 @@
             Selected region: {Math.round(appState.region.width)} x {Math.round(appState.region.height)} pixels
             at ({Math.round(appState.region.x)}, {Math.round(appState.region.y)})
           </div>
+        {:else if regionOptional}
+          <div class="region-info">No box needed — the background colour is sampled from the edges.</div>
         {/if}
 
         <div class="action-buttons">
@@ -214,7 +244,7 @@
               disabled={!appState.canProcess}
               onclick={handleProcess}
             >
-              Remove Watermark
+              {actionLabel}
             </button>
           {/if}
         </div>
@@ -223,7 +253,7 @@
 
   {:else if appState.stage === 'processing'}
     <div class="processing-section">
-      <Spinner size="lg" message="Processing your image with AI..." />
+      <Spinner size="lg" message="Processing your image…" />
     </div>
 
   {:else if appState.stage === 'preview' && appState.result && appState.imagePreviewUrl}
@@ -257,7 +287,7 @@
       </div>
 
       {#if appState.isProcessing}
-        <Spinner size="md" message="Processing batch..." />
+        <Spinner size="md" message="Processing batch…" />
       {/if}
 
       <BatchQueuePanel />
@@ -276,16 +306,19 @@
     text-align: center;
     max-width: 600px;
     margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
   }
 
   .upload-section h2 {
-    margin: 0 0 0.5rem;
+    margin: 0;
     font-size: 1.75rem;
     color: var(--color-text);
   }
 
   .subtitle {
-    margin: 0 0 2rem;
+    margin: 0 0 0.5rem;
     color: var(--color-text-muted);
   }
 
