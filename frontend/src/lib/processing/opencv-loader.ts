@@ -44,16 +44,13 @@ export function loadCv(): Promise<Cv> {
 
     const settle = () => {
       const cv = g.cv;
-      // Some bundler builds assign a Promise to `cv`; the official build does not.
-      if (cv && typeof (cv as { then?: unknown }).then === 'function') {
-        (cv as Promise<Cv>).then(resolve).catch(reject);
-        return true;
-      }
-      if (isReady(cv)) {
-        resolve(cv);
-        return true;
-      }
-      return false;
+      if (!isReady(cv)) return false;
+      // The Emscripten Module carries a non-standard `then` that calls back
+      // synchronously with itself, so resolving a Promise with it recurses
+      // forever and freezes the tab. Strip it before handing the namespace out.
+      delete (cv as { then?: unknown }).then;
+      resolve(cv);
+      return true;
     };
 
     if (settle()) return;
