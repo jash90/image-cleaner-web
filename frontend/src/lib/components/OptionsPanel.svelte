@@ -1,9 +1,22 @@
 <script lang="ts">
   import { appState } from '$lib/stores/app.svelte';
+  import type { BackgroundMethod } from '$lib/types/watermark';
 
   function handleLosslessChange(e: Event) {
     const target = e.target as HTMLInputElement;
     appState.setLossless(target.checked);
+  }
+
+  function handleMethodChange(method: BackgroundMethod) {
+    appState.setBgMethod(method);
+  }
+
+  function handleToleranceChange(e: Event) {
+    appState.setBgTolerance(parseInt((e.target as HTMLInputElement).value, 10));
+  }
+
+  function handleFeatherChange(e: Event) {
+    appState.setBgFeather(parseInt((e.target as HTMLInputElement).value, 10));
   }
 
   function handleParallelChange(e: Event) {
@@ -18,20 +31,78 @@
 </script>
 
 <div class="options-panel">
-  <label class="option">
-    <input
-      type="checkbox"
-      checked={appState.lossless}
-      onchange={handleLosslessChange}
-    />
-    <span class="checkmark"></span>
-    <div class="option-content">
-      <span class="option-label">Lossless output</span>
-      <span class="option-description">
-        Save as PNG instead of JPEG (larger file size, no compression artifacts)
-      </span>
+  {#if appState.mode === 'watermark'}
+    <label class="option">
+      <input type="checkbox" checked={appState.lossless} onchange={handleLosslessChange} />
+      <span class="checkmark"></span>
+      <div class="option-content">
+        <span class="option-label">Lossless output</span>
+        <span class="option-description">
+          Save as PNG instead of JPEG (larger file, no compression artifacts)
+        </span>
+      </div>
+    </label>
+  {:else}
+    <div class="method-group">
+      <span class="option-label">Method</span>
+      <div class="method-options">
+        <label class="radio">
+          <input
+            type="radio"
+            name="bg-method"
+            checked={appState.bgOptions.method === 'grabcut'}
+            onchange={() => handleMethodChange('grabcut')}
+          />
+          <span class="radio-content">
+            <span class="radio-label">GrabCut (subject box)</span>
+            <span class="option-description">Best for complex scenes — box the subject to keep.</span>
+          </span>
+        </label>
+        <label class="radio">
+          <input
+            type="radio"
+            name="bg-method"
+            checked={appState.bgOptions.method === 'colorkey'}
+            onchange={() => handleMethodChange('colorkey')}
+          />
+          <span class="radio-content">
+            <span class="radio-label">Colour key (solid background)</span>
+            <span class="option-description">Removes a uniform background from the edges inward.</span>
+          </span>
+        </label>
+      </div>
     </div>
-  </label>
+
+    {#if appState.bgOptions.method === 'colorkey'}
+      <div class="slider-row">
+        <label for="tolerance">Tolerance <strong>{appState.bgOptions.tolerance}</strong></label>
+        <input
+          id="tolerance"
+          type="range"
+          min="4"
+          max="120"
+          step="1"
+          value={appState.bgOptions.tolerance}
+          oninput={handleToleranceChange}
+        />
+      </div>
+    {/if}
+
+    <div class="slider-row">
+      <label for="feather">Edge feather <strong>{appState.bgOptions.feather}px</strong></label>
+      <input
+        id="feather"
+        type="range"
+        min="0"
+        max="6"
+        step="1"
+        value={appState.bgOptions.feather}
+        oninput={handleFeatherChange}
+      />
+    </div>
+
+    <p class="png-note">Background removal always exports a transparent PNG.</p>
+  {/if}
 
   {#if appState.isBatchMode}
     <div class="option-divider"></div>
@@ -46,7 +117,7 @@
       <div class="option-content">
         <span class="option-label">Parallel processing</span>
         <span class="option-description">
-          Process multiple images simultaneously (faster but uses more API quota)
+          Process multiple images at once (faster, uses more CPU)
         </span>
       </div>
     </label>
@@ -71,17 +142,35 @@
     padding: 1rem;
     background: var(--color-surface, #1a2332);
     border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
   }
 
   .option {
+    position: relative;
     display: flex;
     align-items: flex-start;
     gap: 0.75rem;
     cursor: pointer;
   }
 
-  .option input[type="checkbox"] {
-    display: none;
+  /* Visually hidden but still focusable / operable from the keyboard. */
+  .option input[type='checkbox'] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .option input[type='checkbox']:focus-visible + .checkmark {
+    outline: 2px solid var(--color-primary, #6366f1);
+    outline-offset: 2px;
   }
 
   .checkmark {
@@ -128,15 +217,75 @@
     color: var(--color-text-muted, #8892a0);
   }
 
+  .method-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .method-options {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .radio {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    cursor: pointer;
+  }
+
+  .radio input {
+    margin-top: 0.2rem;
+    accent-color: var(--color-primary, #6366f1);
+  }
+
+  .radio-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+
+  .radio-label {
+    font-weight: 500;
+    color: var(--color-text, #e2e8f0);
+    font-size: 0.9rem;
+  }
+
+  .slider-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+  }
+
+  .slider-row label {
+    font-size: 0.8125rem;
+    color: var(--color-text-muted, #8892a0);
+  }
+
+  .slider-row strong {
+    color: var(--color-text, #e2e8f0);
+  }
+
+  .slider-row input[type='range'] {
+    width: 100%;
+    accent-color: var(--color-primary, #6366f1);
+  }
+
+  .png-note {
+    margin: 0;
+    font-size: 0.75rem;
+    color: var(--color-text-muted, #8892a0);
+  }
+
   .option-divider {
     height: 1px;
     background: var(--color-border, #3a4a5c);
-    margin: 0.75rem 0;
   }
 
   .sub-option {
     padding-left: 2rem;
-    margin-top: 0.5rem;
   }
 
   .select-option {
