@@ -24,6 +24,13 @@ export interface ProcessedImage {
 
 const INPAINT_RADIUS = 3;
 
+// The pure-JS fallback runs on the main thread at O(iterations * area), so it
+// is bounded twice: regions above MAX_FALLBACK_AREA are rejected outright, and
+// the iteration count is capped so total work stays near FALLBACK_WORK_BUDGET
+// pixel updates (a larger hole gets fewer, coarser passes instead of a freeze).
+export const MAX_FALLBACK_AREA = 1_000_000;
+const FALLBACK_WORK_BUDGET = 150_000_000;
+
 export async function removeWatermark(
   source: Blob,
   region: WatermarkRegion,
@@ -36,6 +43,11 @@ export async function removeWatermark(
   if (cv && typeof cv.inpaint === 'function') {
     inpaintWithOpenCv(cv, imageData, rect);
   } else {
+    if (rect.width * rect.height > MAX_FALLBACK_AREA) {
+      throw new Error(
+        `Selected region is too large to inpaint in the browser (max ${MAX_FALLBACK_AREA.toLocaleString('en-US')} px). Select a smaller area around the watermark.`
+      );
+    }
     diffusionInpaint(imageData, rect);
   }
 
@@ -148,7 +160,11 @@ function diffusionInpaint(imageData: ImageData, rect: WatermarkRegion): void {
 
   // Jacobi iterations: each hole pixel becomes the average of its 4 neighbours.
   const maxDim = Math.max(rect.width, rect.height);
-  const iterations = Math.min(600, Math.max(60, maxDim * 2));
+  const holeArea = Math.max(1, rect.width * rect.height);
+  const iterations = Math.max(
+    1,
+    Math.min(600, Math.max(60, maxDim * 2), Math.floor(FALLBACK_WORK_BUDGET / holeArea))
+  );
   const nr = new Float32Array(r);
   const ng = new Float32Array(g);
   const nb = new Float32Array(b);

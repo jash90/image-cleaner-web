@@ -148,14 +148,29 @@
   }
 
   .option {
+    position: relative;
     display: flex;
     align-items: flex-start;
     gap: 0.75rem;
     cursor: pointer;
   }
 
+  /* Visually hidden but still focusable / operable from the keyboard. */
   .option input[type='checkbox'] {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .option input[type='checkbox']:focus-visible + .checkmark {
+    outline: 2px solid var(--color-primary, #6366f1);
+    outline-offset: 2px;
   }
 
   .checkmark {

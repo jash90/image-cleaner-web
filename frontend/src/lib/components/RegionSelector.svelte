@@ -6,7 +6,7 @@
     imageUrl: string;
     imageWidth: number;
     imageHeight: number;
-    onRegionChange: (region: WatermarkRegion) => void;
+    onRegionChange: (region: WatermarkRegion | null) => void;
     initialRegion?: WatermarkRegion | null;
     instruction?: string;
   }
@@ -104,10 +104,13 @@
     }
   });
 
-  // Notify parent of region changes
+  // Notify parent of region changes; an empty / too-small box clears the
+  // parent's region so a stale selection can never be processed.
   $effect(() => {
     if (currentRegion && currentRegion.width >= 5 && currentRegion.height >= 5) {
       onRegionChange(currentRegion);
+    } else {
+      onRegionChange(null);
     }
   });
 

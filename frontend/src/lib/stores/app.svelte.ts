@@ -72,7 +72,11 @@ class AppState {
 
   // Actions
   setMode(mode: ProcessMode) {
+    if (mode === this.mode) return;
     this.mode = mode;
+    // The box means "erase" for watermarks but "keep" for GrabCut, so a stale
+    // selection must not carry over into the other mode.
+    this.region = null;
   }
 
   setBgMethod(method: BackgroundOptions['method']) {
@@ -87,12 +91,26 @@ class AppState {
     this.bgOptions = { ...this.bgOptions, feather };
   }
 
+  /** Revoke blob URLs and drop single/batch state before a new selection. */
+  private clearSelection() {
+    if (this.imagePreviewUrl) {
+      URL.revokeObjectURL(this.imagePreviewUrl);
+    }
+    for (const f of this.batchFiles) {
+      if (f.result?.blobUrl) URL.revokeObjectURL(f.result.blobUrl);
+    }
+    this.imagePreviewUrl = null;
+    this.batchFiles = [];
+    this.batchProgress = null;
+    this.clearResult();
+  }
+
   setFile(file: File) {
+    this.clearSelection();
     this.currentFile = file;
     this.imagePreviewUrl = URL.createObjectURL(file);
     this.region = null;
     this.error = null;
-    this.clearResult();
     this.stage = 'select';
   }
 
@@ -105,6 +123,7 @@ class AppState {
     }
 
     // Batch mode
+    this.clearSelection();
     this.batchFiles = files.map((file, index) => ({
       id: `${Date.now()}-${index}`,
       file,
@@ -118,7 +137,7 @@ class AppState {
     this.stage = 'batch-select';
   }
 
-  setRegion(region: WatermarkRegion) {
+  setRegion(region: WatermarkRegion | null) {
     this.region = region;
   }
 

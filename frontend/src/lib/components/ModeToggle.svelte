@@ -7,20 +7,40 @@
     { value: 'background', label: 'Remove Background' },
   ];
 
+  let buttons: HTMLButtonElement[] = [];
+
   function select(mode: ProcessMode) {
     appState.setMode(mode);
   }
+
+  // Radio-group keyboard pattern: arrow keys move the selection and focus.
+  function handleKeydown(e: KeyboardEvent, index: number) {
+    let next: number;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      next = (index + 1) % modes.length;
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      next = (index - 1 + modes.length) % modes.length;
+    } else {
+      return;
+    }
+    e.preventDefault();
+    select(modes[next].value);
+    buttons[next]?.focus();
+  }
 </script>
 
-<div class="mode-toggle" role="tablist" aria-label="Processing mode">
-  {#each modes as m (m.value)}
+<div class="mode-toggle" role="radiogroup" aria-label="Processing mode">
+  {#each modes as m, i (m.value)}
     <button
+      bind:this={buttons[i]}
       type="button"
-      role="tab"
-      aria-selected={appState.mode === m.value}
+      role="radio"
+      aria-checked={appState.mode === m.value}
+      tabindex={appState.mode === m.value ? 0 : -1}
       class="mode-btn"
       class:active={appState.mode === m.value}
       onclick={() => select(m.value)}
+      onkeydown={(e) => handleKeydown(e, i)}
     >
       {m.label}
     </button>
@@ -57,5 +77,10 @@
   .mode-btn.active {
     background: var(--color-primary, #6366f1);
     color: white;
+  }
+
+  .mode-btn:focus-visible {
+    outline: 2px solid var(--color-primary, #6366f1);
+    outline-offset: 2px;
   }
 </style>

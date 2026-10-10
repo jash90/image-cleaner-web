@@ -73,7 +73,7 @@ npm run preview       # preview the production build
 
 ## Project Structure
 
-```
+```text
 ├── frontend/                      # Svelte 5 + SvelteKit static SPA
 │   └── src/
 │       ├── lib/

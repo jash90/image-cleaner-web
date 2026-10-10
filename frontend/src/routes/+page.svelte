@@ -48,7 +48,7 @@
     appState.mode === 'watermark' ? 'Remove Watermark' : 'Remove Background'
   );
 
-  function handleRegionChange(region: WatermarkRegion) {
+  function handleRegionChange(region: WatermarkRegion | null) {
     appState.setRegion(region);
   }
 
@@ -206,14 +206,18 @@
 
       {#if appState.imagePreviewUrl && imageWidth > 0}
         <div class="selector-wrapper">
-          <RegionSelector
-            imageUrl={appState.imagePreviewUrl}
-            {imageWidth}
-            {imageHeight}
-            onRegionChange={handleRegionChange}
-            initialRegion={appState.region}
-            instruction={selectorInstruction}
-          />
+          <!-- Remount on mode change: the box means "erase" in one mode and
+               "keep" in the other, so a mode switch starts a fresh selection. -->
+          {#key appState.mode}
+            <RegionSelector
+              imageUrl={appState.imagePreviewUrl}
+              {imageWidth}
+              {imageHeight}
+              onRegionChange={handleRegionChange}
+              initialRegion={appState.region}
+              instruction={selectorInstruction}
+            />
+          {/key}
         </div>
       {/if}
 
